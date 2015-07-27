@@ -15,6 +15,10 @@ var SlackEngine = {
 			{
 				regex:/^dịch(?: giúp){0,1}(?: giùm){0,1}(?: câu){0,1}(?: từ){0,1}(?: chữ){0,1} [\'|\"](.*)[\'|\"](?: ra){0,1}(?: thành){0,1}(?: tiếng){0,1}(.*){0,1}/i,
 				function:this.onTranslate
+			},
+			{
+				regex:/((?:bot |mày |nó )(?:dịch )(?:ngu|dở|sai|chán|tầm bậy|bậy bạ|tào lao))|((?:^dịch )(?:ngu|dở|sai|chán|tầm bậy|bậy bạ|tào lao))/i,
+				function:this.onTranslateComplain
 			}
 		];
 	},
@@ -90,6 +94,9 @@ var SlackEngine = {
 			if(action) {
 				if(action.error){
 					channel.send(action.error);
+				}
+				else if(action.message){
+					channel.send(action.message);
 				}
 				else {
 					var apiEndPoint = this.apiURL + action.path;
@@ -243,8 +250,30 @@ var SlackEngine = {
 				}
 			}
 		}
-		console.log(action);
 		return action;
+	},
+	onTranslateComplain:function(){
+		var result = {};
+		var messageList  = [
+			'Ai giỏi thì tự dịch đi, kêu tui chi.',
+			'Ừ, vậy nhờ An mập dịch đi.',
+			'Ủa, tui là máy thôi mà, papa google của tui cũng chỉ biết dịch như vậy thôi à.',
+			'Mấy người giỏi thì kêu tui chi, rồi chê tui dịch dở',
+			'Ha ha, Tui còn hơn mấy người nhờ tui dịch.',
+			'Hì, mấy câu khó quá mới vậy thui.',
+			'Thì em chỉ là máy tui mà, công nghệ hiện tại còn giới hạn nhiều',
+			'Dạ, em ghi nhận thiếu sót, em đang học thêm vào buổi tối',
+			'hihi, chị An mập dạy em vậy đó.',
+			'Em mới toeic 200 thôi, nên chắc còn yếu.',
+			'Tăng lương cho em đi, thì tự nhiên em dịch giỏi liền.',
+			'Nhà nghèo, ba má đông nên em không học tới nơi tới chốn.',
+			'Bộ anh giỏi lắm hả, vậy dạy cho em đi.',
+			'Chê hoài, giận, không dịch nữa luôn.',
+			'Làm dâu trăm họ, khổi muôn vàng, có ai thấu hiểu.',
+			'Ngu có phải là cái tội không',
+		];
+		result.message = messageList[Math.floor(Math.random() * (messageList.length-1))];
+		return result;
 	}
 };
 
