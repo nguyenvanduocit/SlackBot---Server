@@ -11,6 +11,9 @@
     "request": "^2.58.0",
     "underscore": "1.6.0"
   },
+  "engines": {
+    "node": "0.12.2"
+  },
   "devDependencies": {},
   "repository": {
     "type": "git",

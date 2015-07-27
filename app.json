@@ -1,0 +1,7 @@
+{
+  "name": "Slackbot",
+  "description": "A slackbot",
+  "repository": "https://github.com/nguyenvanduocit/SlackBot-Server",
+  "logo": "http://node-js-sample.herokuapp.com/node.svg",
+  "keywords": ["node", "express", "static"]
+}

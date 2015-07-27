@@ -5,7 +5,7 @@ var request = require( 'request' );
 var SlackEngine = {
 	initialize: function () {
 		this.apiURL = 'http://lab.senviet.org/slackBotAPI/web/'; //replate with your webservice url
-		this.token = 'xoxb-8190296064-Ah8g0jEuLpWSN3IcchkWARY6'; //replace with your token
+		this.token = process.env.token; //replace with your token
 		this.slack = new Slack( this.token, true, true );
 		this.channels = [];
 		this.groups = [];
