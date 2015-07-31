@@ -105,13 +105,13 @@ var SlackEngine = {
 		var channelName = ( channel != null ? channel.is_channel : void 0 ) ? '#' : '';
 		channelName = channelName + ( channel ? channel.name : 'UNKNOWN_CHANNEL' );
 		var userName = ( user != null ? user.name : void 0 ) != null ? "@" + user.name : "UNKNOWN_USER";
-		console.log( "Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
 		if ( type === 'message' && ( text != null) && (channel != null ) ) {
 			if(user.id == this.admin.id){
 
 			}
 			var action = this.getAction( text );
 			if ( action ) {
+				console.log( "Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
 				if ( action.error ) {
 					/**
 					 * If getAction return an error
@@ -148,7 +148,9 @@ var SlackEngine = {
 			}
 			else{
 				if(channel.is_im){
+					isAskToBot = true;
 					this.cleverbot.ask(text, function (err, response) {
+						console.log( "Response: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
 						channel.send( response );
 					});
 				}
