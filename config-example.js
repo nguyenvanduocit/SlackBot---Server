@@ -1,3 +1,5 @@
 module.exports = {
-  token: ''//Your token
-  };
+  token: '',
+  cleverbot_api_user:'',
+  cleverbot_api_key:'',
+};

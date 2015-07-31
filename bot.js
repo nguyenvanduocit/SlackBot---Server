@@ -3,11 +3,14 @@ var _ = require( 'underscore' )._;
 var Backbone = require( 'backbone' );
 var request = require( 'request' );
 var config = require( './config.js' );
+var cleverbot = require("cleverbot.io");
 var SlackEngine = {
 	initialize: function () {
 		this.apiURL = 'https://et-slack-bot-service.herokuapp.com'; //replate with your webservice url
 		this.token = config.token; //replace with your token
 		this.slack = new Slack( this.token, true, true );
+		this.cleverbot  = new cleverbot(config.cleverbot_api_user, config.cleverbot_api_key);
+		this.cleverbot.setNick("homepage");
 		this.channels = [];
 		this.groups = [];
 		this.pubsub = {};
@@ -141,6 +144,13 @@ var SlackEngine = {
 							console.log( response.statusCode );
 						}
 					} );
+				}
+			}
+			else{
+				if(channel.is_im){
+					this.cleverbot.ask(text, function (err, response) {
+						channel.send( response );
+					});
 				}
 			}
 		} else {
