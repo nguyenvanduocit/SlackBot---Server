@@ -11,6 +11,15 @@ var SlackEngine = {
 		this.channels = [];
 		this.groups = [];
 		this.pubsub = {};
+		/**
+		 * This is my account, replace with your.
+		 * @type {{username: string, id: string}}
+		 */
+		this.admin = {
+			username:'duocnv',
+			id:'U0842NV7U'
+		};
+
 		_.extend( this.pubsub, Backbone.Events );
 		this.regexMap = [
 			{
@@ -90,21 +99,14 @@ var SlackEngine = {
 		var text = message.text;
 		var channel = this.slack.getChannelGroupOrDMByID( message.channel );
 		var user = this.slack.getUserByID( message.user );
-		var channelName = (
-			channel != null ? channel.is_channel : void 0
-		) ? '#' : '';
-		channelName = channelName + (
-				channel ? channel.name : 'UNKNOWN_CHANNEL'
-			);
-		var userName = (
-		               user != null ? user.name : void 0
-		               ) != null ? "@" + user.name : "UNKNOWN_USER";
+		var channelName = ( channel != null ? channel.is_channel : void 0 ) ? '#' : '';
+		channelName = channelName + ( channel ? channel.name : 'UNKNOWN_CHANNEL' );
+		var userName = ( user != null ? user.name : void 0 ) != null ? "@" + user.name : "UNKNOWN_USER";
 		console.log( "Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
-		if ( type === 'message' && (
-			text != null
-			) && (
-		     channel != null
-		     ) ) {
+		if ( type === 'message' && ( text != null) && (channel != null ) ) {
+			if(user.id == this.admin.id){
+
+			}
 			var action = this.getAction( text );
 			if ( action ) {
 				if ( action.error ) {
@@ -121,11 +123,6 @@ var SlackEngine = {
 				}
 				else {
 					var apiEndPoint = this.apiURL + action.path;
-					channel.postMessage({
-						text:'Testting message',
-						username:'duocNV',
-						as_user:true
-					});
 					request.post( {url: apiEndPoint, formData: action.data}, function ( error, response, body ) {
 						if ( ! error && response.statusCode == 200 ) {
 							try {

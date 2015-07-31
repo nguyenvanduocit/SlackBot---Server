@@ -6,6 +6,7 @@
   "dependencies": {
     "backbone": "^1.2.1",
     "bower": "~1.2.8",
+    "cleverbot.io": "^1.0.4",
     "jade": "1.4.2",
     "node-uuid": "^1.4.3",
     "request": "^2.58.0",
