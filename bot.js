@@ -3,14 +3,14 @@ var _ = require( 'underscore' )._;
 var Backbone = require( 'backbone' );
 var request = require( 'request' );
 var config = require( './config.js' );
-var cleverbot = require("cleverbot.io");
+var cleverbot = require( "cleverbot.io" );
 var SlackEngine = {
 	initialize: function () {
 		this.apiURL = 'https://et-slack-bot-service.herokuapp.com'; //replate with your webservice url
 		this.token = config.token; //replace with your token
 		this.slack = new Slack( this.token, true, true );
-		this.cleverbot  = new cleverbot(config.cleverbot_api_user, config.cleverbot_api_key);
-		this.cleverbot.setNick("homepage");
+		this.cleverbot = new cleverbot( config.cleverbot_api_user, config.cleverbot_api_key );
+		this.cleverbot.setNick( "homepage" );
 		this.channels = [];
 		this.groups = [];
 		this.pubsub = {};
@@ -19,8 +19,8 @@ var SlackEngine = {
 		 * @type {{username: string, id: string}}
 		 */
 		this.admin = {
-			username:'duocnv',
-			id:'U0842NV7U'
+			username: 'duocnv',
+			id: 'U0842NV7U'
 		};
 
 		_.extend( this.pubsub, Backbone.Events );
@@ -102,13 +102,9 @@ var SlackEngine = {
 		var text = message.text;
 		var channel = this.slack.getChannelGroupOrDMByID( message.channel );
 		var user = this.slack.getUserByID( message.user );
-		var channelName = ( channel != null ? channel.is_channel : void 0 ) ? '#' : '';
-		channelName = channelName + ( channel ? channel.name : 'UNKNOWN_CHANNEL' );
-		var userName = ( user != null ? user.name : void 0 ) != null ? "@" + user.name : "UNKNOWN_USER";
-		if ( type === 'message' && ( text != null) && (channel != null ) ) {
-			if(user.id == this.admin.id){
-
-			}
+		var channelName = (channel != null ? channel.is_channel : void 0) ? '#' : '';channelName = channelName + (channel ? channel.name : 'UNKNOWN_CHANNEL');
+		var userName = (user != null ? user.name : void 0) != null ? "@" + user.name : "UNKNOWN_USER";
+		if ( type === 'message' && (text != null) && (channel != null) ) {
 			var action = this.getAction( text );
 			if ( action ) {
 				console.log( "Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
@@ -146,13 +142,17 @@ var SlackEngine = {
 					} );
 				}
 			}
-			else{
-				if(channel.is_im){
-					isAskToBot = true;
-					this.cleverbot.ask(text, function (err, response) {
-						console.log( "Response: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
-						channel.send( response );
-					});
+			else {
+				if ( channel.is_im ) {
+					this.talkWithBot(text, user, channel);
+				}
+				else{
+					var regex = /(?:^an) (.*)/i;
+					var matchs = regex.exec( text );
+					if ( matchs !== null ) {
+						this.talkWithBot( matchs[1], user, channel);
+					}
+
 				}
 			}
 		} else {
@@ -164,6 +164,76 @@ var SlackEngine = {
 			} ).join( ' ' );
 			return console.log( "@" + this.slack.self.name + " could not respond. " + errors );
 		}
+	},
+	talkWithBot:function(text, user, channel){
+		var postData = {
+			mimeType: 'application/x-www-form-urlencoded',
+			params: [
+				{
+					name: 'input',
+					value: text
+				}, {
+					name: 'debug',
+					value: 'true'
+				}, {
+					name: 'login',
+					value: 'chrome-demo'
+				}, {
+					name: 'id',
+					value: user.id
+				}, {
+					name: 'timeZone',
+					value: '+7'
+				}, {
+					name: 'safeSearch',
+					value: 'false'
+				}, {
+					name: 'locale',
+					value: 'vi-VN'
+				}, {
+					name: 'clientFeatures',
+					value: 'say'
+				}, {
+					name: 'location',
+					value: '10.7866501,106.6468263'
+				}
+			]
+		};
+		request( {
+				har: {
+					url: 'https://ask.pannous.com/api',
+					method: 'POST',
+					headers: [
+						{
+							name: 'content-type',
+							value: 'application/x-www-form-urlencoded'
+						}
+					],
+					postData: postData
+				}
+			},
+			function ( error, response, body ) {
+				if ( ! error && response.statusCode == 200 ) {
+					try {
+						var responseObject = JSON.parse( body );
+						var outputs = responseObject.output;
+						if(outputs.length > 0){
+							var output = outputs[0];
+							var actions = output.actions;
+							if(actions.say)
+							{
+								channel.send(actions.say.text);
+							}
+						}
+						else
+						{
+							channel.send('I am tired, I need to go to bed.');
+						}
+					} catch ( e ) {
+						console.log( e.message );
+					}
+				}
+			} );
 	},
 	getAction: function ( text ) {
 		for ( var index = 0; index < this.regexMap.length; index ++ ) {
@@ -281,7 +351,7 @@ var SlackEngine = {
 						'Bạn thật vui tính, nhưng mình rất tiếc, ngôn ngữ này là 100% hư cấu.',
 					];
 					action.error = messageList[ Math.floor( Math.random() * (
-						messageList.length - 1
+							messageList.length - 1
 						) ) ];
 				}
 			}
@@ -309,7 +379,7 @@ var SlackEngine = {
 			'Ngu có phải là cái tội không',
 		];
 		result.message = messageList[ Math.floor( Math.random() * (
-			messageList.length - 1
+				messageList.length - 1
 			) ) ];
 		return result;
 	}
