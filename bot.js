@@ -3,14 +3,11 @@ var _ = require( 'underscore' )._;
 var Backbone = require( 'backbone' );
 var request = require( 'request' );
 var config = require( './config.js' );
-var cleverbot = require( "cleverbot.io" );
 var SlackEngine = {
 	initialize: function () {
 		this.apiURL = 'https://et-slack-bot-service.herokuapp.com'; //replate with your webservice url
 		this.token = config.token; //replace with your token
 		this.slack = new Slack( this.token, true, true );
-		this.cleverbot = new cleverbot( config.cleverbot_api_user, config.cleverbot_api_key );
-		this.cleverbot.setNick( "homepage" );
 		this.channels = [];
 		this.groups = [];
 		this.pubsub = {};
@@ -18,11 +15,7 @@ var SlackEngine = {
 		 * This is my account, replace with your.
 		 * @type {{username: string, id: string}}
 		 */
-		this.admin = {
-			username: 'duocnv',
-			id: 'U0842NV7U'
-		};
-
+		this.adminChannelId = 'G087MNF7Z';
 		_.extend( this.pubsub, Backbone.Events );
 		this.regexMap = [
 			{
@@ -78,7 +71,6 @@ var SlackEngine = {
 					return g.name;
 				} )
 		);
-
 		console.log( 'Welcome to Slack. You are ' + this.slack.self.name + ' of ' + this.slack.team.name );
 
 		if ( this.channels.length > 0 ) {
@@ -97,6 +89,7 @@ var SlackEngine = {
 	 * @param message
 	 */
 	onMessage: function ( message ) {
+		var self = this;
 		var type = message.type;
 		var ts = message.ts;
 		var text = message.text;
@@ -105,20 +98,23 @@ var SlackEngine = {
 		var channelName = (channel != null ? channel.is_channel : void 0) ? '#' : '';channelName = channelName + (channel ? channel.name : 'UNKNOWN_CHANNEL');
 		var userName = (user != null ? user.name : void 0) != null ? "@" + user.name : "UNKNOWN_USER";
 		if ( type === 'message' && (text != null) && (channel != null) ) {
-			var action = this.getAction( text );
+			var action = this.getAction( text, user, channel );
 			if ( action ) {
-				console.log( "Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
+				channel.sendTyping();
+				this.sendToAdmin( "Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
 				if ( action.error ) {
 					/**
 					 * If getAction return an error
 					 */
 					channel.send( action.error );
+					this.sendToAdmin( 'Response: ' + channelName + " " + userName + ' : ' + action.error );
 				}
 				else if ( action.message ) {
 					/**
 					 * if getAction return a message
 					 */
 					channel.send( action.message );
+					self.sendToAdmin( 'Response: ' + channelName + " " + userName + ' : ' + action.message );
 				}
 				else {
 					var apiEndPoint = this.apiURL + action.path;
@@ -128,29 +124,41 @@ var SlackEngine = {
 								var responseObject = JSON.parse( body );
 								if ( responseObject.errorCode ) {
 									channel.send( responseObject.message );
+									self.sendToAdmin( 'Response: ' + channelName + " " + userName + ' : ' + responseObject.message );
 								}
 								else {
 									channel.send( responseObject.message );
+									self.sendToAdmin( 'Response: ' + channelName + " " + userName + ' : ' + responseObject.message );
 								}
 							} catch ( e ) {
-								console.log( e.message );
+								self.sendToAdmin( 'Error: ' + channelName + " " + userName + ' : ' + e.message );
 							}
 						}
 						else {
-							console.log( response.statusCode );
+							self.sendToAdmin( 'Error: ' + channelName + " " + userName + ' : ' + response.statusCode );
 						}
 					} );
 				}
 			}
 			else {
 				if ( channel.is_im ) {
+					channel.sendTyping();
+					this.sendToAdmin( "Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
 					this.talkWithBot(text, user, channel);
 				}
 				else{
-					var regex = /(?:^an) (.*)/i;
-					var matchs = regex.exec( text );
-					if ( matchs !== null ) {
-						this.talkWithBot( matchs[1], user, channel);
+					var regexList = [
+						/(?:^an)(?:,){0,1} (.*)/i,
+						/(^.*)(?:\,| |\.){1}(?:an)/i
+					];
+					for(var index = 0; index < regexList.length; index++){
+						var matchs = regexList[index].exec( text );
+						if ( matchs !== null ) {
+							channel.sendTyping();
+							this.sendToAdmin( "Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
+							this.talkWithBot( matchs[1], user, channel);
+							break;
+						}
 					}
 
 				}
@@ -162,10 +170,13 @@ var SlackEngine = {
 			var errors = [ typeError, textError, channelError ].filter( function ( element ) {
 				return element !== null;
 			} ).join( ' ' );
-			return console.log( "@" + this.slack.self.name + " could not respond. " + errors );
+			self.sendToAdmin( "@" + this.slack.self.name + " could not respond. " + errors );
 		}
 	},
 	talkWithBot:function(text, user, channel){
+		var self = this;
+		var channelName = (channel != null ? channel.is_channel : void 0) ? '#' : '';channelName = channelName + (channel ? channel.name : 'UNKNOWN_CHANNEL');
+		var userName = (user != null ? user.name : void 0) != null ? "@" + user.name : "UNKNOWN_USER";
 		var postData = {
 			mimeType: 'application/x-www-form-urlencoded',
 			params: [
@@ -223,19 +234,29 @@ var SlackEngine = {
 							if(actions.say)
 							{
 								channel.send(actions.say.text);
+								self.sendToAdmin( 'Response: ' + channelName + " " + userName + ' : ' + actions.say.text );
 							}
 						}
 						else
 						{
 							channel.send('I am tired, I need to go to bed.');
+							self.sendToAdmin( 'Response: ' + channelName + " " + userName + ' : ' + 'Reach API' );
 						}
 					} catch ( e ) {
-						console.log( e.message );
+						self.sendToAdmin( 'ERROR: ' + channelName + " " + userName + ' : ' + e.message );
 					}
 				}
 			} );
 	},
-	getAction: function ( text ) {
+	getAction: function ( text, user, channel ) {
+		if(channel.id == this.adminChannelId){
+			var regex = /(.*):(.*)/;
+			var matchs = regex.exec(text);
+			if(matchs.length === 3){
+				var userId = matchs[1];
+				var message = matchs[2];
+			}
+		}
 		for ( var index = 0; index < this.regexMap.length; index ++ ) {
 			if ( this.regexMap[ index ].regex.exec( text ) !== null ) {
 				return this.regexMap[ index ].function.call( this, text );
@@ -357,6 +378,10 @@ var SlackEngine = {
 			}
 		}
 		return action;
+	},
+	sendToAdmin:function(text){
+		var adminChannel = this.slack.getChannelGroupOrDMByID(this.adminChannelId);
+		adminChannel.send(text);
 	},
 	onTranslateComplain: function () {
 		var result = {};
