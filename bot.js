@@ -25,6 +25,14 @@ var SlackEngine = {
 			{
 				regex: /((?:bot |mày |nó )(?:dịch )(?:ngu|dở|sai|chán|tầm bậy|bậy bạ|tào lao))|((?:^dịch )(?:ngu|dở|sai|chán|tầm bậy|bậy bạ|tào lao))/i,
 				function: this.onTranslateComplain
+			},
+			{
+				regex: /(?:^getlink)(?: )*(?:\:){0,1}(?: )*(.*)/i,
+				function: this.onGetLink
+			},
+			{
+				regex: /(?:^an)(?: )*(?:\:){0,1}(?: )*(connect me)/i,
+				function: this.onConnect
 			}
 		];
 	},
@@ -91,6 +99,13 @@ var SlackEngine = {
 	onMessage: function ( message ) {
 		var self = this;
 		var type = message.type;
+		var subtype = message.subtype;
+		if(subtype === 'bot_message'){
+			/**
+			 * We do not talk with bot
+			 */
+			return;
+		}
 		var ts = message.ts;
 		var text = message.text;
 		var channel = this.slack.getChannelGroupOrDMByID( message.channel );
@@ -98,7 +113,7 @@ var SlackEngine = {
 		var channelName = (channel != null ? channel.is_channel : void 0) ? '#' : '';channelName = channelName + (channel ? channel.name : 'UNKNOWN_CHANNEL');
 		var userName = (user != null ? user.name : void 0) != null ? "@" + user.name : "UNKNOWN_USER";
 		if ( type === 'message' && (text != null) && (channel != null) ) {
-			var action = this.getAction( text, user, channel );
+			var action = this.getAction( text, channel );
 			if ( action ) {
 				channel.sendTyping();
 				this.sendToAdmin( "Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
@@ -135,7 +150,8 @@ var SlackEngine = {
 							}
 						}
 						else {
-							self.sendToAdmin( 'Error: ' + channelName + " " + userName + ' : ' + response.statusCode );
+							console.log(error);
+							self.sendToAdmin( 'Error: ' + channelName + " " + userName );
 						}
 					} );
 				}
@@ -200,13 +216,17 @@ var SlackEngine = {
 					value: 'false'
 				}, {
 					name: 'locale',
-					value: 'vi-VN'
+					value: 'en'
 				}, {
 					name: 'clientFeatures',
-					value: 'say'
+					value: 'say,all'
 				}, {
 					name: 'location',
-					value: '10.7866501,106.6468263'
+					value: '10.7730058,106.6829365'
+				},
+				{
+					name: 'googleAccessToken',
+					value: 'ya29.wgGv-HzWpgt_C_cFZpmp8VpqOSV0yPucBp8MkpMB9Te7ANeXnUtUEP06GjeREoyOQYIb'
 				}
 			]
 		};
@@ -231,7 +251,19 @@ var SlackEngine = {
 						if(outputs.length > 0){
 							var output = outputs[0];
 							var actions = output.actions;
-							if(actions.say)
+							var isNeedToSay  =true;
+							if(actions.show){
+								if(actions.show.images){
+									isNeedToSay = false;
+									var images = actions.show.images;
+									channel.send(images[Math.floor(Math.random()*images.length)]);
+								}
+							}
+							if(actions.open){
+							}
+							if(actions.reminder){
+							}
+							if(actions.say && isNeedToSay)
 							{
 								channel.send(actions.say.text);
 								self.sendToAdmin( 'Response: ' + channelName + " " + userName + ' : ' + actions.say.text );
@@ -248,7 +280,7 @@ var SlackEngine = {
 				}
 			} );
 	},
-	getAction: function ( text, user, channel ) {
+	getAction: function ( text, channel ) {
 		if(channel.id == this.adminChannelId){
 			var regex = /(.*):(.*)/;
 			var matchs = regex.exec(text);
@@ -380,8 +412,87 @@ var SlackEngine = {
 		return action;
 	},
 	sendToAdmin:function(text){
-		var adminChannel = this.slack.getChannelGroupOrDMByID(this.adminChannelId);
-		adminChannel.send(text);
+		//var adminChannel = this.slack.getChannelGroupOrDMByID(this.adminChannelId);
+		//adminChannel.send(text);
+	},
+	onGetLink:function(text){
+		var action = null;
+		var regex = /http:\/\/mp3\.zing\.vn\/(bai-hat|video-clip)\/(?:.*)\/(.*)\.html/;
+		var matches = regex.exec(text);
+		if(matches.length == 3){
+			var apiPath = 'song/getsonginfo';
+			switch (matches[1]){
+				case 'bai-hat':
+					apiPath = 'song/getsonginfo';
+					break;
+				case 'video-clip':
+					apiPath = 'video/getvideoinfo';
+					break;
+			}
+			action  ={
+				path:'/zingmp3',
+				data:{
+					path:apiPath,
+					id:matches[2]
+				}
+			};
+		}
+		else
+		{
+			action = {
+				message:'I can get download link for this link.'
+			}
+		}
+		return action;
+	},
+	onConnect:function(){
+		var google = require('googleapis');
+		var OAuth2 = google.auth.OAuth2;
+		var plus = google.plus('v1');
+		var oauth2Client = new OAuth2('101897604929.apps.googleusercontent.com', 'qnFfHvpNl5cK1NuDQFwOAXNe', 'http://laptrinh.senviet.org');
+		google.options({ auth: oauth2Client });
+		// generate a url that asks permissions for Google+ and Google Calendar scopes
+		var scopes = [
+			'https://www.googleapis.com/auth/calendar',
+		    'https://www.googleapis.com/auth/plus.me',
+		    'https://www.googleapis.com/auth/gmail.readonly'
+		];
+		var url = oauth2Client.generateAuthUrl({
+			access_type: 'offline', // 'online' (default) or 'offline' (gets refresh_token)
+			scope: scopes // If you only need one scope you can pass it as string
+		});
+		var code = '4/n_xhS-jXxPzPryqUkS76ezlTQ2adoZJJ-qDBZXfwrMY#';
+		oauth2Client.getToken(code, function(err, tokens) {
+			// Now tokens contains an access_token and an optional refresh_token. Save them.
+			if(!err) {
+				oauth2Client.setCredentials(tokens);
+				var gmail = google.gmail('v1');
+				gmail.users.labels.list({
+					auth: oauth2Client,
+					userId: 'me',
+				}, function(err, response) {
+					if (err) {
+						console.log('The API returned an error: ' + err);
+						return;
+					}
+					var labels = response.labels;
+					if (labels.length == 0) {
+						console.log('No labels found.');
+					} else {
+						console.log('Labels:');
+						for (var i = 0; i < labels.length; i++) {
+							var label = labels[i];
+							console.log('- %s', label.name);
+						}
+					}
+				});
+			}
+			else{
+				console.log(err);
+			}
+		});
+
+		return {message:url};
 	},
 	onTranslateComplain: function () {
 		var result = {};
