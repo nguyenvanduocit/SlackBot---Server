@@ -158,7 +158,7 @@ var SlackEngine = {
 					value: '+7'
 				}, {
 					name: 'safeSearch',
-					value: 'false'
+					value: 'true'
 				}, {
 					name: 'locale',
 					value: 'en'
