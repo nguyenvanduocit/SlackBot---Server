@@ -31,8 +31,12 @@ var SlackEngine = {
 				function: this.onGetLink
 			},
 			{
-				regex: /(?:^an)(?: )*(?:\:){0,1}(?: )*(connect me)/i,
-				function: this.onConnect
+				regex: /(Github status)/i,
+				function: this.onCheckGithubStatus
+			},
+			{
+				regex: /(?:^an)(?:,){0,1} (.*)/i,
+				function: this.onMention
 			}
 		];
 	},
@@ -113,70 +117,10 @@ var SlackEngine = {
 		var channelName = (channel != null ? channel.is_channel : void 0) ? '#' : '';channelName = channelName + (channel ? channel.name : 'UNKNOWN_CHANNEL');
 		var userName = (user != null ? user.name : void 0) != null ? "@" + user.name : "UNKNOWN_USER";
 		if ( type === 'message' && (text != null) && (channel != null) ) {
-			var action = this.getAction( text, channel );
-			if ( action ) {
-				channel.sendTyping();
-				this.sendToAdmin( "Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
-				if ( action.error ) {
-					/**
-					 * If getAction return an error
-					 */
-					channel.send( action.error );
-					this.sendToAdmin( 'Response: ' + channelName + " " + userName + ' : ' + action.error );
-				}
-				else if ( action.message ) {
-					/**
-					 * if getAction return a message
-					 */
-					channel.send( action.message );
-					self.sendToAdmin( 'Response: ' + channelName + " " + userName + ' : ' + action.message );
-				}
-				else {
-					var apiEndPoint = this.apiURL + action.path;
-					request.post( {url: apiEndPoint, formData: action.data}, function ( error, response, body ) {
-						if ( ! error && response.statusCode == 200 ) {
-							try {
-								var responseObject = JSON.parse( body );
-								if ( responseObject.errorCode ) {
-									channel.send( responseObject.message );
-									self.sendToAdmin( 'Response: ' + channelName + " " + userName + ' : ' + responseObject.message );
-								}
-								else {
-									channel.send( responseObject.message );
-									self.sendToAdmin( 'Response: ' + channelName + " " + userName + ' : ' + responseObject.message );
-								}
-							} catch ( e ) {
-								self.sendToAdmin( 'Error: ' + channelName + " " + userName + ' : ' + e.message );
-							}
-						}
-						else {
-							console.log(error);
-							self.sendToAdmin( 'Error: ' + channelName + " " + userName );
-						}
-					} );
-				}
-			}
-			else {
+			var action = this.doAction( text, user, channel );
+			if ( !action ) {
 				if ( channel.is_im ) {
-					channel.sendTyping();
-					this.sendToAdmin( "Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
 					this.talkWithBot(text, user, channel);
-				}
-				else{
-					var regexList = [
-						/(?:^an)(?:,){0,1} (.*)/i,
-						/(^.*)(?:\,| |\.){1}(?:an)/i
-					];
-					for(var index = 0; index < regexList.length; index++){
-						var matchs = regexList[index].exec( text );
-						if ( matchs !== null ) {
-							channel.sendTyping();
-							this.sendToAdmin( "Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"" );
-							this.talkWithBot( matchs[1], user, channel);
-							break;
-						}
-					}
-
 				}
 			}
 		} else {
@@ -193,6 +137,7 @@ var SlackEngine = {
 		var self = this;
 		var channelName = (channel != null ? channel.is_channel : void 0) ? '#' : '';channelName = channelName + (channel ? channel.name : 'UNKNOWN_CHANNEL');
 		var userName = (user != null ? user.name : void 0) != null ? "@" + user.name : "UNKNOWN_USER";
+		channel.sendTyping();
 		var postData = {
 			mimeType: 'application/x-www-form-urlencoded',
 			params: [
@@ -223,10 +168,6 @@ var SlackEngine = {
 				}, {
 					name: 'location',
 					value: '10.7730058,106.6829365'
-				},
-				{
-					name: 'googleAccessToken',
-					value: 'ya29.wgGv-HzWpgt_C_cFZpmp8VpqOSV0yPucBp8MkpMB9Te7ANeXnUtUEP06GjeREoyOQYIb'
 				}
 			]
 		};
@@ -280,23 +221,16 @@ var SlackEngine = {
 				}
 			} );
 	},
-	getAction: function ( text, channel ) {
-		if(channel.id == this.adminChannelId){
-			var regex = /(.*):(.*)/;
-			var matchs = regex.exec(text);
-			if(matchs.length === 3){
-				var userId = matchs[1];
-				var message = matchs[2];
-			}
-		}
+	doAction: function ( text, user, channel ) {
 		for ( var index = 0; index < this.regexMap.length; index ++ ) {
 			if ( this.regexMap[ index ].regex.exec( text ) !== null ) {
-				return this.regexMap[ index ].function.call( this, text );
+				this.regexMap[ index ].function.call( this,text, user, channel );
+				return true;
 			}
 		}
-		return null;
+		return false;
 	},
-	onTranslate: function ( text ) {
+	onTranslate: function ( text, user, channel ) {
 		/*var action  ={
 		 path:'translate',
 		 data:{
@@ -403,23 +337,50 @@ var SlackEngine = {
 						'Quý khách tự sáng tạo ra ngôn ngữ này hả ?',
 						'Bạn thật vui tính, nhưng mình rất tiếc, ngôn ngữ này là 100% hư cấu.',
 					];
-					action.error = messageList[ Math.floor( Math.random() * (
+					action.error =  messageList[ Math.floor( Math.random() * (
 							messageList.length - 1
 						) ) ];
 				}
 			}
+			if(!action.error){
+				this.callAPI(action, user, channel);
+			}
+			else{
+				channel.send(action.error);
+			}
 		}
-		return action;
+	},
+	callAPI:function(action, user, channel){
+		var apiEndPoint = this.apiURL + action.path;
+		request.post( {url: apiEndPoint, formData: action.data}, function ( error, response, body ) {
+			if ( ! error && response.statusCode == 200 ) {
+				try {
+					var responseObject = JSON.parse( body );
+					if ( responseObject.errorCode ) {
+						channel.send( responseObject.message );
+					}
+					else {
+						channel.send( responseObject.message );
+					}
+				} catch ( e ) {
+					console.log( e.message);
+				}
+			}
+			else {
+				console.log(error);
+			}
+		} );
 	},
 	sendToAdmin:function(text){
 		//var adminChannel = this.slack.getChannelGroupOrDMByID(this.adminChannelId);
 		//adminChannel.send(text);
 	},
-	onGetLink:function(text){
+	onGetLink:function(text, user, channel){
 		var action = null;
 		var regex = /http:\/\/mp3\.zing\.vn\/(bai-hat|video-clip)\/(?:.*)\/(.*)\.html/;
 		var matches = regex.exec(text);
 		if(matches.length == 3){
+			channel.sendTyping();
 			var apiPath = 'song/getsonginfo';
 			switch (matches[1]){
 				case 'bai-hat':
@@ -436,66 +397,43 @@ var SlackEngine = {
 					id:matches[2]
 				}
 			};
+			this.callAPI(action, user, channel);
 		}
 		else
 		{
-			action = {
-				message:'I can get download link for this link.'
+			channel.send('I can get download link for this link.')
+		}
+	},
+	onCheckGithubStatus:function(text, user, channel){
+		channel.sendTyping();
+		request.get( {url: 'https://status.github.com/api/last-message.json'}, function ( error, response, body ) {
+			if ( ! error && response.statusCode == 200 ) {
+				try {
+					var responseObject = JSON.parse( body );
+					if ( responseObject.body ) {
+						channel.send( responseObject.body );
+					}
+				} catch ( e ) {
+					console.log( e.message);
+				}
+			}
+			else {
+				console.log(error);
+			}
+		} );
+	},
+	onMention: function(text, user, channel){
+		var regex = /(?:^an)(?:,){0,1} (.*)/i;
+		var matches = regex.exec( text );
+		if ( matches !== null ) {
+			text = matches[1];
+			if(!this.doAction( text, user, channel)){
+				this.talkWithBot(text, user, channel);
 			}
 		}
-		return action;
 	},
-	onConnect:function(){
-		var google = require('googleapis');
-		var OAuth2 = google.auth.OAuth2;
-		var plus = google.plus('v1');
-		var oauth2Client = new OAuth2('101897604929.apps.googleusercontent.com', 'qnFfHvpNl5cK1NuDQFwOAXNe', 'http://laptrinh.senviet.org');
-		google.options({ auth: oauth2Client });
-		// generate a url that asks permissions for Google+ and Google Calendar scopes
-		var scopes = [
-			'https://www.googleapis.com/auth/calendar',
-		    'https://www.googleapis.com/auth/plus.me',
-		    'https://www.googleapis.com/auth/gmail.readonly'
-		];
-		var url = oauth2Client.generateAuthUrl({
-			access_type: 'offline', // 'online' (default) or 'offline' (gets refresh_token)
-			scope: scopes // If you only need one scope you can pass it as string
-		});
-		var code = '4/n_xhS-jXxPzPryqUkS76ezlTQ2adoZJJ-qDBZXfwrMY#';
-		oauth2Client.getToken(code, function(err, tokens) {
-			// Now tokens contains an access_token and an optional refresh_token. Save them.
-			if(!err) {
-				oauth2Client.setCredentials(tokens);
-				var gmail = google.gmail('v1');
-				gmail.users.labels.list({
-					auth: oauth2Client,
-					userId: 'me',
-				}, function(err, response) {
-					if (err) {
-						console.log('The API returned an error: ' + err);
-						return;
-					}
-					var labels = response.labels;
-					if (labels.length == 0) {
-						console.log('No labels found.');
-					} else {
-						console.log('Labels:');
-						for (var i = 0; i < labels.length; i++) {
-							var label = labels[i];
-							console.log('- %s', label.name);
-						}
-					}
-				});
-			}
-			else{
-				console.log(err);
-			}
-		});
-
-		return {message:url};
-	},
-	onTranslateComplain: function () {
-		var result = {};
+	onTranslateComplain: function (text, user, channel) {
+		channel.sendTyping();
 		var messageList = [
 			'Ai giỏi thì tự dịch đi, kêu tui chi.',
 			'Ừ, vậy nhờ An mập dịch đi.',
@@ -514,10 +452,10 @@ var SlackEngine = {
 			'Làm dâu trăm họ, khổi muôn vàng, có ai thấu hiểu.',
 			'Ngu có phải là cái tội không',
 		];
-		result.message = messageList[ Math.floor( Math.random() * (
+		var message = messageList[ Math.floor( Math.random() * (
 				messageList.length - 1
 			) ) ];
-		return result;
+		channel.send(message);
 	}
 };
 
