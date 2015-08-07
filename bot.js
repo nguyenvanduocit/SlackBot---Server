@@ -32,6 +32,9 @@ var SlackEngine = {
 			},{
 				regex: /meme (\d+) (.*)/i,
 				function: this.onMeme
+			},{
+				regex: /meme list/i,
+				function: this.onMemeList
 			},
 			{
 				regex: /(Github status)/i,
@@ -383,7 +386,7 @@ var SlackEngine = {
 		var matches = regex.exec(text);
 		if(matches.length == 3){
 			var action  ={
-				path:'/meme',
+				path:'/meme/generate',
 				data:{
 					backgroundId:matches[1],
 					text:matches[2]
@@ -392,6 +395,13 @@ var SlackEngine = {
 			channel.sendTyping();
 			this.callAPI(action, user, channel);
 		}
+	},
+	onMemeList:function(text, user, channel){
+		var action  ={
+			path:'/meme/list'
+		};
+		channel.sendTyping();
+		this.callAPI(action, user, channel);
 	},
 	onGetLink:function(text, user, channel){
 		var action = null;
