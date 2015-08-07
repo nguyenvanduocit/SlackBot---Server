@@ -5,7 +5,7 @@ var request = require( 'request' );
 var config = require( './config.js' );
 var SlackEngine = {
 	initialize: function () {
-		this.apiURL = 'https://et-slack-bot-service.herokuapp.com'; //replate with your webservice url
+		this.apiURL = 'http://slackbotapi.senviet.org'; //replate with your webservice url
 		this.token = config.token; //replace with your token
 		this.slack = new Slack( this.token, true, true );
 		this.channels = [];
@@ -29,6 +29,9 @@ var SlackEngine = {
 			{
 				regex: /(?:^getlink)(?: )*(?:\:){0,1}(?: )*(.*)/i,
 				function: this.onGetLink
+			},{
+				regex: /meme (\d+) (.*)/i,
+				function: this.onMeme
 			},
 			{
 				regex: /(Github status)/i,
@@ -374,6 +377,21 @@ var SlackEngine = {
 	sendToAdmin:function(text){
 		//var adminChannel = this.slack.getChannelGroupOrDMByID(this.adminChannelId);
 		//adminChannel.send(text);
+	},
+	onMeme: function(text, user, channel){
+		var regex = /meme (\d+) (.*)/;
+		var matches = regex.exec(text);
+		if(matches.length == 3){
+			var action  ={
+				path:'/meme',
+				data:{
+					backgroundId:matches[1],
+					text:matches[2]
+				}
+			};
+			channel.sendTyping();
+			this.callAPI(action, user, channel);
+		}
 	},
 	onGetLink:function(text, user, channel){
 		var action = null;
