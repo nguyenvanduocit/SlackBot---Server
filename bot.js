@@ -43,6 +43,10 @@ var SlackEngine = {
 			{
 				regex: /(?:^an)(?:,){0,1} (.*)/i,
 				function: this.onMention
+			},
+			{
+				regex:/^shot (http[s]{0,1}:\/\/[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b[-a-zA-Z0-9@:%_\+.~#?&\/\/=]*)/i,
+				function : this.onWebShot
 			}
 		];
 	},
@@ -122,12 +126,18 @@ var SlackEngine = {
 		var user = this.slack.getUserByID( message.user );
 		var channelName = (channel != null ? channel.is_channel : void 0) ? '#' : '';channelName = channelName + (channel ? channel.name : 'UNKNOWN_CHANNEL');
 		var userName = (user != null ? user.name : void 0) != null ? "@" + user.name : "UNKNOWN_USER";
-		if ( type === 'message' && (text != null) && (channel != null) ) {
-			var action = this.doAction( text, user, channel );
-			if ( !action ) {
-				if ( channel.is_im ) {
-					this.talkWithBot(text, user, channel);
+		if ( type === 'message' && (text != null) && (channel != null) && ( user != null )) {
+			if(!user.is_bot) {
+				var action = this.doAction( text, user, channel );
+				if ( ! action ) {
+					if ( channel.is_im ) {
+						this.talkWithBot( text, user, channel );
+					}
 				}
+			}
+			else
+			{
+
 			}
 		} else {
 			var typeError = type !== 'message' ? "unexpected type " + type + "." : null;
@@ -366,7 +376,33 @@ var SlackEngine = {
 						channel.send( responseObject.message );
 					}
 					else {
-						channel.send( responseObject.message );
+						if(responseObject.type)
+						{
+							switch (responseObject.type){
+								case 'photo':
+									channel.postMessage(
+										{
+											username:'Meme',
+											as_user:true,
+											attachments:[
+												{
+													"fallback": "Required plain-text summary of the attachment.",
+													"color": "#36a64f",
+													"image_url": responseObject.image_url,
+													"thumb_url": responseObject.image_url
+												}
+											]
+										}
+									);
+									break;
+								case 'text':
+									channel.send( responseObject.message );
+									break;
+							}
+						}
+						else {
+							channel.send( responseObject.message );
+						}
 					}
 				} catch ( e ) {
 					console.log( e.message);
@@ -449,6 +485,16 @@ var SlackEngine = {
 				console.log(error);
 			}
 		} );
+	},
+	onWebShot:function(text, user, channel){
+		var regex = /(http[s]{0,1}:\/\/[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b[-a-zA-Z0-9@:%_\+.~#?&\/\/=]*)/i;
+		var matches = regex.exec( text );
+		if ( matches !== null ) {
+			var url = matches[1];
+			channel.sendTyping();
+			var webshot = require('webshot');
+
+		}
 	},
 	onMention: function(text, user, channel){
 		var regex = /(?:^an)(?:,){0,1} (.*)/i;
