@@ -41,12 +41,16 @@ var SlackEngine = {
 				function: this.onCheckGithubStatus
 			},
 			{
-				regex: /(?:^an)(?:,){0,1} (.*)/i,
+				regex: /(?:^an_map)(?:,){0,1} (.*)/i,
 				function: this.onMention
 			},
 			{
-				regex:/^shot (http[s]{0,1}:\/\/[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b[-a-zA-Z0-9@:%_\+.~#?&\/\/=]*)/i,
-				function : this.onWebShot
+				regex:/^(.*) quote/i,
+				function : this.onFunnyQuote
+			},
+			{
+				regex:/^horo of (.*)/i,
+				function : this.onHoro
 			}
 		];
 	},
@@ -330,6 +334,7 @@ var SlackEngine = {
 					'ur': /Urdu/i,
 					'vi': /Vietnamese|Việt Nam|Việt/i,
 					'cy': /Welsh/i,
+					'lo': /Lào/i,
 					'yi': /Yiddish/i
 				};
 				for ( var code in languageMap ) {
@@ -396,7 +401,18 @@ var SlackEngine = {
 									);
 									break;
 								case 'text':
-									channel.send( responseObject.message );
+									channel.postMessage(
+										{
+											username:'Meme',
+											as_user:true,
+											attachments:[
+												{
+													"text": responseObject.message,
+													"color": "#36a64f",
+												}
+											]
+										}
+									);
 									break;
 							}
 						}
@@ -486,18 +502,38 @@ var SlackEngine = {
 			}
 		} );
 	},
-	onWebShot:function(text, user, channel){
-		var regex = /(http[s]{0,1}:\/\/[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b[-a-zA-Z0-9@:%_\+.~#?&\/\/=]*)/i;
+	onHoro:function(text, user, channel){
+		var regex = /^horo of (.*)/i;
 		var matches = regex.exec( text );
 		if ( matches !== null ) {
-			var url = matches[1];
+			var sign = matches[1];
+			var action  ={
+				path:'/horoscope',
+				data:{
+					sign:sign
+				}
+			};
 			channel.sendTyping();
-			var webshot = require('webshot');
-
+			this.callAPI(action, user, channel);
+		}
+	},
+	onFunnyQuote:function(text, user, channel){
+		var regex = /^(.*) quote/i;
+		var matches = regex.exec( text );
+		if ( matches !== null ) {
+			var category = matches[1];
+			var action  ={
+				path:'/quote',
+				data:{
+					category:category
+				}
+			};
+			channel.sendTyping();
+			this.callAPI(action, user, channel);
 		}
 	},
 	onMention: function(text, user, channel){
-		var regex = /(?:^an)(?:,){0,1} (.*)/i;
+		var regex = /(?:^an_map)(?:,){0,1} (.*)/i;
 		var matches = regex.exec( text );
 		if ( matches !== null ) {
 			text = matches[1];
