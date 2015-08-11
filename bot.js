@@ -49,8 +49,12 @@ var SlackEngine = {
 				function : this.onFunnyQuote
 			},
 			{
-				regex:/^horo of (.*)/i,
+				regex:/^(?:horo|horoscope|day|today) of (.*)/i,
 				function : this.onHoro
+			},
+			{
+				regex:/^help/i,
+				function : this.onHelp
 			}
 		];
 	},
@@ -378,46 +382,43 @@ var SlackEngine = {
 				try {
 					var responseObject = JSON.parse( body );
 					if ( responseObject.errorCode ) {
-						channel.send( responseObject.message );
+						channel.send( responseObject.text );
 					}
 					else {
 						if(responseObject.type)
 						{
 							switch (responseObject.type){
-								case 'photo':
+								case 'attachment':
 									channel.postMessage(
 										{
 											username:'Meme',
 											as_user:true,
 											attachments:[
 												{
-													"fallback": "Required plain-text summary of the attachment.",
-													"color": "#36a64f",
-													"image_url": responseObject.image_url,
-													"thumb_url": responseObject.image_url
+													title: responseObject.title,
+													title_link: responseObject.title_link,
+													fallback: responseObject.fallback,
+													color: responseObject.color,
+													image_url: responseObject.image_url,
+													thumb_url: responseObject.thumb_url,
+													text: responseObject.text,
+													pretext:responseObject.pretext,
+													author_name:responseObject.author_name,
+													author_link:responseObject.author_link,
+													author_icon:responseObject.author_icon,
+													fields: responseObject.fields
 												}
 											]
 										}
 									);
 									break;
 								case 'text':
-									channel.postMessage(
-										{
-											username:'Meme',
-											as_user:true,
-											attachments:[
-												{
-													"text": responseObject.message,
-													"color": "#36a64f",
-												}
-											]
-										}
-									);
+									channel.send( responseObject.text );
 									break;
 							}
 						}
 						else {
-							channel.send( responseObject.message );
+							channel.send( responseObject.text );
 						}
 					}
 				} catch ( e ) {
@@ -502,8 +503,55 @@ var SlackEngine = {
 			}
 		} );
 	},
+	onHelp:function(text, user, channel){
+		channel.postMessage(
+			{
+				username:'Meme',
+				as_user:true,
+				attachments:[
+					{
+						text: 'Dưới đây là những gì mà An Mập có thể hỗ trợ cho bạn, Thay cụm [] và {} thành các giá trị mà bạn muốn, ký hiệu [] nghĩa không bắt buộc, {} nghĩa là bắt buộc',
+						fields: [
+							{
+								title: "Dịch thuật",
+								value: 'Dịch "{Nội dung cần dịch}" [qua tiếng anh|đức|pháp|thái|....]',
+								short: false
+							},
+							{
+								title: "Meme",
+								value: 'meme {số từ 1 tới 10} {nội dung}',
+								short: false
+							},
+							{
+								title: "Getlink nhạc 320",
+								value: 'getlink {link bài hát ở mp3.zing.vn}',
+								short: false
+							},{
+								title: "Kiểm tra status của github",
+								value: 'Github status',
+								short: false
+							},{
+								title: "Câu nói vui",
+								value: '{funny|programming} quote',
+								short: false
+							},{
+								title: "Cung hoàng đạo",
+								value: '{horo|day|horoscope} of {tên cung bằng tiếng Anh}',
+								short: false
+							},
+							{
+								title: "Chat thông minh",
+								value: 'Chỉ cần mở DM lên và chat là được',
+								short: false
+							}
+						]
+					}
+				]
+			}
+		);
+	},
 	onHoro:function(text, user, channel){
-		var regex = /^horo of (.*)/i;
+		var regex = /^(?:horo|horoscope|day|today) of (.*)/i;
 		var matches = regex.exec( text );
 		if ( matches !== null ) {
 			var sign = matches[1];
