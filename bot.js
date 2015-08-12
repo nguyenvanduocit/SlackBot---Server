@@ -47,6 +47,9 @@ var SlackEngine = {
 			{
 				regex:/^(.*) quote/i,
 				function : this.onFunnyQuote
+			},{
+				regex:/^fun fact about (.*)/i,
+				function : this.onFunFact
 			},
 			{
 				regex:/^(?:horo|horoscope|day|today) of (.*)/i,
@@ -391,7 +394,7 @@ var SlackEngine = {
 								case 'attachment':
 									channel.postMessage(
 										{
-											username:'Meme',
+											username:'thuy_an',
 											as_user:true,
 											attachments:[
 												{
@@ -504,6 +507,7 @@ var SlackEngine = {
 		} );
 	},
 	onHelp:function(text, user, channel){
+		channel.sendTyping();
 		channel.postMessage(
 			{
 				username:'Meme',
@@ -543,6 +547,11 @@ var SlackEngine = {
 								title: "Chat thông minh",
 								value: 'Chỉ cần mở DM lên và chat là được',
 								short: false
+							},
+							{
+								title: "Fun fact",
+								value: 'fun fact about {programming}',
+								short: false
 							}
 						]
 					}
@@ -572,6 +581,21 @@ var SlackEngine = {
 			var category = matches[1];
 			var action  ={
 				path:'/quote',
+				data:{
+					category:category
+				}
+			};
+			channel.sendTyping();
+			this.callAPI(action, user, channel);
+		}
+	},
+	onFunFact:function(text, user, channel){
+		var regex = /^fun fact about (.*)/i;
+		var matches = regex.exec( text );
+		if ( matches !== null ) {
+			var category = matches[1];
+			var action  ={
+				path:'/funnyimage/random',
 				data:{
 					category:category
 				}
