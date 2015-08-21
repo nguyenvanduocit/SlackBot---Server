@@ -58,6 +58,14 @@ var SlackEngine = {
 			{
 				regex:/^help/i,
 				function : this.onHelp
+			},
+			{
+				regex:/^test (.*)/i,
+				function : this.onQuiz
+			},
+			{
+				regex:/^(\d)$/,
+				function : this.onQuiz
 			}
 		];
 	},
@@ -506,6 +514,9 @@ var SlackEngine = {
 			}
 		} );
 	},
+	onQuiz:function(text, user, channel){
+		Quizzer.onRequest(text, user, channel);
+	},
 	onHelp:function(text, user, channel){
 		channel.sendTyping();
 		channel.postMessage(
@@ -641,6 +652,266 @@ var SlackEngine = {
 	}
 };
 
-
 SlackEngine.initialize();
 SlackEngine.run();
+
+/**
+ * this is the place of quizzer
+ * @type {{isReady: boolean, apiEndPoint: string, categories: Array, regexMap: Array, CONTEXT: {STOP: string, START: string, SELECT_TEST: string, ANSWERING: string, WAITING_FOR_QUESTION: string, CHECKING_FOR_ANSWER: string}, initialize: Function, onRequest: Function, start: Function, chooseCategory: Function, sendCategory: Function, getCategoryFieldList: Function, stop: Function, getRandomQuestion: Function, checkAnswer: Function, getTestList: Function, setTestContext: Function, fetchCategory: Function}}
+ */
+
+var Quizzer = {
+	isReady :false,
+	apiEndPoint:'http://smarterer.vn/wp-admin/admin-ajax.php',
+	categories:{},
+	regexMap : [],
+	CONTEXT:{
+		'STOP':'stop',
+		'START':'start',
+		'SELECT_TEST':'select_test',
+		'WAITING_FOR_ANSWER':'answering',
+		'WAITING_FOR_QUESTION':'waiting_for_question',
+		'CHECKING_FOR_ANSWER':'checking_for_answer'
+	},
+	initialize:function(){
+		this.pubsub = {};
+		_.extend( this.pubsub, Backbone.Events );
+		this.regexMap = [
+			{
+				regex:/(?:test) (start)(?: ){0,1}(.*){0,1}/i,
+				function:this.start
+			},
+			{
+				regex:/(?:test) (stop)/i,
+				function:this.stop
+			},
+			{
+				regex:/(?:test) (?:choose) (.*)/i,
+				function:this.chooseCategory
+			},
+			{
+				regex:/^(\d)$/,
+				function:this.onAnswer
+			}
+		];
+		this.fetchCategory();
+	},
+	onRequest:function(text, user, channel){
+
+		if(!this.isReady){
+			channel.send('I am not ready, please try in a minute.');
+			return false
+		}
+		for ( var index = 0; index < this.regexMap.length; index ++ ) {
+			var matchs = this.regexMap[ index ].regex.exec( text );
+			if (  matchs ) {
+				if(matchs[1] !=='start' && !channel.hasOwnProperty('quizz')){
+					channel.send('Type "test start" to start a test');
+					return false;
+				}
+				this.regexMap[ index ].function.call( this,text, user, channel, matchs );
+				return true;
+			}
+		}
+		return false;
+	},
+	start:function(text, user, channel, matchs){
+		var self = this;
+		/**
+		 * Reset the quizz
+		 * @type {{}}
+		 */
+		channel.quizz = {};
+		channel.quizz.context = this.CONTEXT.SELECT_TEST;
+		this.pubsub.trigger('onStart');
+		channel.sendTyping();
+
+		channel.send('Your have to choose a category');
+		this.sendCategory( channel );
+	},
+	onAnswer:function(text, user, channel, matchs){
+		channel.sendTyping();
+		if(channel.quizz.context ===this.CONTEXT.WAITING_FOR_ANSWER){
+			var answerIndex = matchs[1];
+			if(answerIndex > channel.quizz.currentQuestion.choices.length){
+				channel.send('Troll me, huh ?');
+				return false;
+			}
+			/**
+			 * answerIndex-1 because we +1 when showing the answer list
+			 */
+			var answerValue = channel.quizz.currentQuestion.choices[answerIndex-1];
+			if( answerValue == channel.quizz.currentQuestion.answer ){
+				channel.send('Dung');
+				channel.context = this.CONTEXT.WAITING_FOR_QUESTION;
+				this.sendRandomQuestion(channel.quizz.category, channel);
+			}
+			else
+			{
+				channel.send('Sai');
+			}
+		}
+		else{
+			channel.send('Not answer this time');
+		}
+	},
+	chooseCategory:function(text, user, channel, matchs){
+		channel.sendTyping();
+		var choiceCategory = matchs[1];
+		if(this.categories.hasOwnProperty(choiceCategory)){
+			channel.send('Your choose category ' + matchs[1]);
+			channel.quizz.category = choiceCategory;
+			this.pubsub.trigger('onCategorySelected');
+			this.sendRandomQuestion(choiceCategory, channel);
+		}
+		else
+		{
+			channel.send('This category is no exist.');
+			this.sendCategory(channel);
+		}
+	},
+	sendRandomQuestion:function(category, channel){
+		var self = this;
+		request.post( {url: this.apiEndPoint, formData: {'action' :'wpq-slack-get-question', category:category, method:'random'}}, function ( error, response, body ) {
+			if ( ! error && response.statusCode == 200 ) {
+				try {
+					var responseObject = JSON.parse( body );
+					if(responseObject.success){
+						/**
+						 * - choices string[]
+						 * - question string
+						 * - answer string
+						 */
+						var question = responseObject.data;
+						channel.quizz.currentQuestion = question;
+						channel.quizz.context = self.CONTEXT.WAITING_FOR_ANSWER;
+						var choices = [];
+						_.each(question.choices, function(choice, index){
+							choices.push({
+								title:(index + 1) + " : " +decodeURIComponent(choice),
+								short:false
+							});
+						});
+						channel.postMessage(
+							{
+								username:'an_map',
+								as_user:true,
+								color:'#FF3300',
+								attachments:[
+									{
+										title: question.question,
+										fields:choices
+									}
+								],
+								icon_emoji:':chart_with_upwards_trend:'
+							}
+						);
+					}
+					else
+					{
+						channel.send(responseObject.message);
+					}
+				} catch ( e ) {
+
+					console.log( e.message);
+				}
+			}
+			else {
+				console.log(error);
+			}
+		} );
+	},
+	sendCategory:function(channel){
+		var fields = [];
+		if(this.categories){
+			fields = this.getCategoryFieldList();
+			/**
+			 * This channel have no category
+			 */
+			channel.postMessage(
+				{
+					username:'an_map',
+					as_user:true,
+					color:'#FF3300',
+					attachments:[
+						{
+							title: 'Please choose a category',
+							text: 'to select, just type the name of category',
+							fields:fields
+						}
+					]
+				}
+			);
+		}
+	},
+	getCategoryFieldList:function(){
+		var fields = [];
+		_.each(this.categories, function(category){
+			fields.push({
+				"title": category.slug,
+				"value":  category.count +" questions.\n"+  category.description,
+				"short": true
+			});
+		});
+		return fields;
+	},
+	stop:function(text, user, channel){
+		if(channel.quizz) {
+			delete(
+				channel.quizz
+			);
+			channel.send( 'Thanks for testing. to start, just type "quizz start"' );
+		}
+		else
+		{
+			channel.send( 'Your have no test to stop' );
+		}
+	},
+	getRandomQuestion:function(){
+		this.CONTEXT=this.CONTEXT.WAITING_FOR_QUESTION;
+	},
+	checkAnswer:function() {
+
+	},
+	getTestList:function(){
+
+	},
+	setTestContext:function(){
+
+	},
+	fetchCategory:function(successCallback, failCallback){
+		var self = this;
+		request.post( {url: this.apiEndPoint, formData: {'action' :'wpq-slack-get-test'}}, function ( error, response, body ) {
+			if ( ! error && response.statusCode == 200 ) {
+				try {
+					var responseObject = JSON.parse( body );
+					if(responseObject.success){
+						for(var index = 0; index<responseObject.data.length; index++){
+							var category =  responseObject.data[index];
+							self.categories[category.slug] = category;
+						}
+						self.isReady = true;
+						if(successCallback){
+							successCallback.call(self.categories);
+						}
+					}
+					else
+					{
+						if(failCallback){
+							failCallback.call( responseObject.message);
+						}
+					}
+				} catch ( e ) {
+					if(failCallback){
+						failCallback.call( e.message);
+					}
+					console.log( e.message);
+				}
+			}
+			else {
+				console.log(error);
+			}
+		} );
+	}
+};
+Quizzer.initialize();
