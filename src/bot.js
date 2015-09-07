@@ -1,8 +1,11 @@
+require('babel/register');
 var Slack = require( 'slack-client' );
 var _ = require( 'underscore' )._;
 var Backbone = require( 'backbone' );
 var request = require( 'request' );
-var config = require( './config.js' );
+var config = require( './../config' );
+var TranslateModule = require('./module/Translate');
+var translateModule = new TranslateModule();
 var SlackEngine = {
 	initialize: function () {
 		this.apiURL = 'http://slackbotapi.senviet.org'; //replate with your webservice url
@@ -61,6 +64,9 @@ var SlackEngine = {
 			},
 			{
 				regex:/^test (.*)/i,
+				function : this.onQuiz
+			},{
+				regex:/^(start) test$/i,
 				function : this.onQuiz
 			},
 			{
@@ -678,7 +684,7 @@ var Quizzer = {
 		_.extend( this.pubsub, Backbone.Events );
 		this.regexMap = [
 			{
-				regex:/(?:test) (start)(?: ){0,1}(.*){0,1}/i,
+				regex:/^(start) test$/i,
 				function:this.start
 			},
 			{
@@ -758,6 +764,9 @@ var Quizzer = {
 	chooseCategory:function(text, user, channel, matchs){
 		channel.sendTyping();
 		var choiceCategory = matchs[1];
+		if(channel.quizz.context != this.CONTEXT.SELECT_TEST){
+			channel.send("You can not change category right now.")
+		}
 		if(this.categories.hasOwnProperty(choiceCategory)){
 			channel.send('Your choose category ' + matchs[1]);
 			channel.quizz.category = choiceCategory;
